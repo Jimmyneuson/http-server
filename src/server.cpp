@@ -65,6 +65,22 @@ int main(int argc, char **argv)
   accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
   std::cout << "Client connected\n";
 
+  // Send a HTTP response
+  /*
+  Status line
+  HTTP/1.1  // HTTP version
+  200       // Status code
+  OK        // Optional reason phrase
+  \r\n      // CRLF that marks the end of the status line
+
+  Headers (empty)
+  \r\n      // CRLF that marks the end of the headers
+
+  Response body (empty)
+  */
+  std::string response = "HTTP/1.1\n200\nOK\r\n\r\n";
+  send(server_fd, &response, sizeof(response), 0);
+
   close(server_fd);
 
   return 0;
