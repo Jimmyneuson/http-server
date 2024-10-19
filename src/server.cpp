@@ -78,12 +78,37 @@ int main(int argc, char **argv)
 
   Response body (empty)
   */
-  std::string response = "HTTP/1.1 200 OK\r\n\r\n";
-  if (send(client_fd, response.c_str(), response.size(), 0) == -1)
+  std::string response_200 = "HTTP/1.1 200 OK\r\n\r\n";
+  std::string response_404 = "HTTP/1.1 404 Not Found\r\n\r\n";
+  if (send(client_fd, response_200.c_str(), response_200.size(), 0) == -1)
   {
     std::cerr << "Could not send response";
   }
 
+  size_t buffer_size = 1024;
+  char *buffer = new char[buffer_size];
+  if (recv(client_fd, buffer, buffer_size, 0) < 0) 
+  {
+    std::cerr << "Could not receive response";
+  }
+
+  std::cout << "Response: " << buffer << std::endl;
+  std::string response(buffer, buffer_size);
+  if (response.substr(0, 6) == "GET / ") 
+  {
+    std::cout << "test";
+    if (send(client_fd, response_200.c_str(), response_200.size(), 0) == -1)
+    {
+      std::cerr << "Could not send response";
+    }
+  } else {
+    std::cout << "test2";
+    if (send(client_fd, response_404.c_str(), response_404.size(), 0) == -1)
+    {
+      std::cerr << "Could not send response";
+    }
+  }
+  std::cout << "test3";
   close(server_fd);
 
   return 0;
