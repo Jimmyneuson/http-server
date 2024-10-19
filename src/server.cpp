@@ -79,7 +79,13 @@ int main(int argc, char **argv)
   Response body (empty)
   */
   std::string response = "HTTP/1.1\n200\nOK\r\n\r\n";
-  send(server_fd, &response, sizeof(response), 0);
+  if (send(server_fd, &response, sizeof(response), 0) == -1)
+  {
+    std::cerr << "Could not send response";
+  } else {
+    std::cout << "Sent 200\n";
+  }
+  std::cout << "test";
 
   close(server_fd);
 
