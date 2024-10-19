@@ -92,23 +92,20 @@ int main(int argc, char **argv)
     std::cerr << "Could not receive response";
   }
 
-  std::cout << "Response: " << buffer << std::endl;
+  std::cout << "Response:\n" << buffer << std::endl;
   std::string response(buffer, buffer_size);
-  if (response.substr(0, 6) == "GET / ") 
+  if (response.substr(0, 6) == "GET / ")
   {
-    std::cout << "test";
     if (send(client_fd, response_200.c_str(), response_200.size(), 0) == -1)
     {
       std::cerr << "Could not send response";
     }
   } else {
-    std::cout << "test2";
     if (send(client_fd, response_404.c_str(), response_404.size(), 0) == -1)
     {
       std::cerr << "Could not send response";
     }
   }
-  std::cout << "test3";
   close(server_fd);
 
   return 0;
