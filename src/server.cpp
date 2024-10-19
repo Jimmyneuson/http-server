@@ -62,7 +62,7 @@ int main(int argc, char **argv)
 
   std::cout << "Waiting for a client to connect...\n";
 
-  accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
+  int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
   std::cout << "Client connected\n";
 
   // Send a HTTP response
@@ -78,14 +78,11 @@ int main(int argc, char **argv)
 
   Response body (empty)
   */
-  std::string response = "HTTP/1.1\n200\nOK\r\n\r\n";
-  if (send(server_fd, &response, sizeof(response), 0) == -1)
+  std::string response = "HTTP/1.1 200 OK\r\n\r\n";
+  if (send(client_fd, response.c_str(), response.size(), 0) == -1)
   {
     std::cerr << "Could not send response";
-  } else {
-    std::cout << "Sent 200\n";
   }
-  std::cout << "test";
 
   close(server_fd);
 
