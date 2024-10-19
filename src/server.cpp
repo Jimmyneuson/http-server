@@ -17,6 +17,9 @@ int main(int argc, char **argv)
   // You can use print statements as follows for debugging, they'll be visible when running tests.
   std::cout << "Logs from your program will appear here!\n";
 
+  // INET is the transport protocol
+  // server_fd is the file descriptor for the socket
+  // Defaults to a TCP server
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0)
   {
@@ -33,11 +36,14 @@ int main(int argc, char **argv)
     return 1;
   }
 
+  // INET address
+  // use `htons` to keep byte interpretations consistent
   struct sockaddr_in server_addr;
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = INADDR_ANY;
   server_addr.sin_port = htons(4221);
 
+  // Assign name to socket
   if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0)
   {
     std::cerr << "Failed to bind to port 4221\n";
@@ -47,7 +53,7 @@ int main(int argc, char **argv)
   int connection_backlog = 5;
   if (listen(server_fd, connection_backlog) != 0)
   {
-    std::cerr << "listen failed\n";
+    std::cerr << "Listen failed\n";
     return 1;
   }
 
