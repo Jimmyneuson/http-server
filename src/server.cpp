@@ -18,6 +18,24 @@ std::string parse_directory(std::string request)
     return request.substr(start, end - start);
 }
 
+std::string plain_text_response(std::string body)
+{
+    std::string response = "HTTP/1.1 200 OK\r\n";
+    response += "Content-Type: text/plain\r\n";
+    response += "Content-Length: " + std::to_string(body.length()) + "\r\n\r\n";
+    response += body;
+    return response;
+}
+
+std::string extract_header(std::string request, std::string header)
+{
+    int start = request.find(header);
+    int end = request.find("\r\n", start);
+    int len = header.length() + 1;
+    std::string value = request.substr(start + len, end - start + len);
+    return value;
+}
+
 int main(int argc, char **argv)
 {
     std::cout << std::unitbuf;
@@ -27,6 +45,14 @@ int main(int argc, char **argv)
     if (server_fd < 0)
     {
         std::cerr << "Failed to create server socket\n";
+        return 1;
+    }
+
+    // Quickly restart server without binding issue
+    int reuse = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1)
+    {
+        std::cerr << "setsockopt failed";
         return 1;
     }
 
@@ -90,13 +116,21 @@ int main(int argc, char **argv)
         {
             std::cerr << "Could not send response";
         }
-    } else if (dir.starts_with("/echo/"))
+    }
+    else if (dir.starts_with("/echo/"))
     {
         std::string body = dir.substr(6, dir.length() - 5);
-        std::string response = "HTTP/1.1 200 OK\r\n";
-        response += "Content-Type: text/plain\r\n";
-        response += "Content-Length:" + std::to_string(body.length()) + "\r\n\r\n";
-        response += body;
+        std::string response = plain_text_response(body);
+        if (send(client_fd, response.c_str(), response.size(), 0) == -1)
+        {
+            std::cerr << "Could not send response";
+            return 1;
+        }
+    }
+    else if (dir.starts_with("/user-agent"))
+    {
+        std::string body = extract_header(request, "User-Agent");
+        std::string response = plain_text_response(body);
         if (send(client_fd, response.c_str(), response.size(), 0) == -1)
         {
             std::cerr << "Could not send response";
