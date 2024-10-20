@@ -20,15 +20,9 @@ std::string parse_directory(std::string request)
 
 int main(int argc, char **argv)
 {
-    // Flush after every std::cout / std::cerr
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
 
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    std::cout << "Logs from your program will appear here!\n";
-
-    // INET is the transport protocol (TCP server)
-    // server_fd is the file descriptor for the socket (just an int)
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0)
     {
@@ -36,23 +30,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Since the tester restarts your program quite often, setting SO_REUSEADDR
-    // ensures that we don't run into 'Address already in use' errors
-    int reuse = 1;
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0)
-    {
-        std::cerr << "setsockopt failed\n";
-        return 1;
-    }
-
     // INET address
-    // use `htons` to keep byte interpretations consistent
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
 
-    // Assign name to socket
     if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0)
     {
         std::cerr << "Failed to bind to port " << PORT << std::endl;
@@ -75,16 +58,16 @@ int main(int argc, char **argv)
 
     // Send a HTTP request
     /*
-    Status line
-    HTTP/1.1  // HTTP version
-    200       // Status code
-    OK        // Optional reason phrase
-    \r\n      // CRLF that marks the end of the status line
+    * Status line
+    * HTTP/1.1  // HTTP version
+    * 200       // Status code
+    * OK        // Optional reason phrase
+    * \r\n      // CRLF that marks the end of the status line
 
-    Headers (empty)
-    \r\n      // CRLF that marks the end of the headers
+    * Headers (empty)
+    * \r\n      // CRLF that marks the end of the headers
 
-    request body (empty)
+    * request body (empty)
     */
     std::string response_200 = "HTTP/1.1 200 OK\r\n\r\n";
     std::string response_404 = "HTTP/1.1 404 Not Found\r\n\r\n";
@@ -94,6 +77,7 @@ int main(int argc, char **argv)
     if (recv(client_fd, buffer, buffer_size, 0) < 0)
     {
         std::cerr << "Could not receive request";
+        return 1;
     }
 
     std::cout << "Request:\n"
@@ -109,10 +93,14 @@ int main(int argc, char **argv)
     } else if (dir.starts_with("/echo/"))
     {
         std::string body = dir.substr(6, dir.length() - 5);
-        std::string response = "HTTP/1.1 200 OK\r\nContent-Type:text/plain\r\nContent-Length:" + std::to_string(body.length()) + "\r\n\r\n" + body;
-        if (send(client_fd, response.c_str(), response.size(), 0) == -1) 
+        std::string response = "HTTP/1.1 200 OK\r\n";
+        response += "Content-Type: text/plain\r\n";
+        response += "Content-Length:" + std::to_string(body.length()) + "\r\n\r\n";
+        response += body;
+        if (send(client_fd, response.c_str(), response.size(), 0) == -1)
         {
             std::cerr << "Could not send response";
+            return 1;
         }
     }
     else
@@ -120,6 +108,7 @@ int main(int argc, char **argv)
         if (send(client_fd, response_404.c_str(), response_404.size(), 0) == -1)
         {
             std::cerr << "Could not send response";
+            return 1;
         }
     }
 
