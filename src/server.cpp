@@ -100,10 +100,17 @@ int main(int argc, char **argv)
               << buffer << std::endl;
     std::string request(buffer, buffer_size);
     std::string dir = parse_directory(request);
-    std::cout << dir;
     if (dir == "/")
     {
         if (send(client_fd, response_200.c_str(), response_200.size(), 0) == -1)
+        {
+            std::cerr << "Could not send response";
+        }
+    } else if (dir.starts_with("/echo/"))
+    {
+        std::string body = dir.substr(6, dir.length() - 5);
+        std::string response = "HTTP/1.1 200 OK\r\nContent-Type:text/plain\r\nContent-Length:" + std::to_string(body.length()) + "\r\n\r\n" + body;
+        if (send(client_fd, response.c_str(), response.size(), 0) == -1) 
         {
             std::cerr << "Could not send response";
         }
