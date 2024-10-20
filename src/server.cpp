@@ -40,6 +40,8 @@ int main(int argc, char **argv)
 {
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
+    const std::string response_200 = "HTTP/1.1 200 OK\r\n\r\n";
+    const std::string response_404 = "HTTP/1.1 404 Not Found\r\n\r\n";
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0)
@@ -82,22 +84,6 @@ int main(int argc, char **argv)
     int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
     std::cout << "Client connected\n";
 
-    // Send a HTTP request
-    /*
-    * Status line
-    * HTTP/1.1  // HTTP version
-    * 200       // Status code
-    * OK        // Optional reason phrase
-    * \r\n      // CRLF that marks the end of the status line
-
-    * Headers (empty)
-    * \r\n      // CRLF that marks the end of the headers
-
-    * request body (empty)
-    */
-    std::string response_200 = "HTTP/1.1 200 OK\r\n\r\n";
-    std::string response_404 = "HTTP/1.1 404 Not Found\r\n\r\n";
-
     size_t buffer_size = 1024;
     char *buffer = new char[buffer_size];
     if (recv(client_fd, buffer, buffer_size, 0) < 0)
@@ -109,6 +95,7 @@ int main(int argc, char **argv)
     std::cout << "Request:\n"
               << buffer << std::endl;
     std::string request(buffer, buffer_size);
+
     std::string dir = parse_directory(request);
     if (dir == "/")
     {
