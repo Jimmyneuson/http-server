@@ -8,11 +8,14 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-std::string parse_directory(std::string response)
+const int PORT = 80;
+const int BACKLOG = 5;
+
+std::string parse_directory(std::string request)
 {
-    int start = response.find(" ") + 1;
-    int end = response.find(" ", start);
-    return response.substr(start, end - start);
+    int start = request.find(" ") + 1;
+    int end = request.find(" ", start);
+    return request.substr(start, end - start);
 }
 
 int main(int argc, char **argv)
@@ -24,9 +27,8 @@ int main(int argc, char **argv)
     // You can use print statements as follows for debugging, they'll be visible when running tests.
     std::cout << "Logs from your program will appear here!\n";
 
-    // INET is the transport protocol
-    // server_fd is the file descriptor for the socket
-    // Defaults to a TCP server
+    // INET is the transport protocol (TCP server)
+    // server_fd is the file descriptor for the socket (just an int)
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0)
     {
@@ -48,17 +50,16 @@ int main(int argc, char **argv)
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(4221);
+    server_addr.sin_port = htons(PORT);
 
     // Assign name to socket
     if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0)
     {
-        std::cerr << "Failed to bind to port 4221\n";
+        std::cerr << "Failed to bind to port " << PORT << std::endl;
         return 1;
     }
 
-    int connection_backlog = 5;
-    if (listen(server_fd, connection_backlog) != 0)
+    if (listen(server_fd, BACKLOG) != 0)
     {
         std::cerr << "Listen failed\n";
         return 1;
@@ -72,7 +73,7 @@ int main(int argc, char **argv)
     int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
     std::cout << "Client connected\n";
 
-    // Send a HTTP response
+    // Send a HTTP request
     /*
     Status line
     HTTP/1.1  // HTTP version
@@ -83,28 +84,24 @@ int main(int argc, char **argv)
     Headers (empty)
     \r\n      // CRLF that marks the end of the headers
 
-    Response body (empty)
+    request body (empty)
     */
     std::string response_200 = "HTTP/1.1 200 OK\r\n\r\n";
     std::string response_404 = "HTTP/1.1 404 Not Found\r\n\r\n";
-    if (send(client_fd, response_200.c_str(), response_200.size(), 0) == -1)
-    {
-        std::cerr << "Could not send response";
-    }
 
     size_t buffer_size = 1024;
     char *buffer = new char[buffer_size];
     if (recv(client_fd, buffer, buffer_size, 0) < 0)
     {
-        std::cerr << "Could not receive response";
+        std::cerr << "Could not receive request";
     }
 
-    std::cout << "Response:\n"
+    std::cout << "Request:\n"
               << buffer << std::endl;
-    std::string response(buffer, buffer_size);
-    std::string dir = parse_directory(response);
-
-    if (dir == "/ ") // root dir
+    std::string request(buffer, buffer_size);
+    std::string dir = parse_directory(request);
+    std::cout << dir;
+    if (dir == "/")
     {
         if (send(client_fd, response_200.c_str(), response_200.size(), 0) == -1)
         {
@@ -118,7 +115,7 @@ int main(int argc, char **argv)
             std::cerr << "Could not send response";
         }
     }
-    close(server_fd);
 
+    close(server_fd);
     return 0;
 }
