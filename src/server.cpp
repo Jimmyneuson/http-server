@@ -129,21 +129,6 @@ int main(int argc, char **argv)
 
     std::cout << "Server is listening on port " << PORT << std::endl;
 
-    //int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, (socklen_t *)&client_addr_len);
-    //std::cout << "Client connected\n";
-
-    //int buffer_size = 1024;
-    //char *buffer = new char[buffer_size];
-    //if (recv(client_fd, buffer, buffer_size, 0) < 0)
-    //{
-    //    std::cerr << "Could not receive request";
-    //    return 1;
-    //}
-
-    //std::cout << "Request:\n" << buffer << std::endl;
-    //std::string request(buffer, buffer_size);
-    //handle_request(client_fd, request);
-
     std::vector<pollfd> fds;
     fds.push_back({server_fd, POLLIN, 0});
 
