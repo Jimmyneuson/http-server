@@ -69,7 +69,8 @@ std::string extract_header(std::string request, std::string header)
     return value;
 }
 
-std::string get_method(std::string request) {
+std::string get_method(std::string request) 
+{
     if (request.starts_with("GET")) 
     {
         return "GET";
@@ -211,7 +212,8 @@ int main(int argc, char **argv)
     if (argc > 2 && std::string(argv[1]) == "--directory")
     {
         working_directory = argv[2];
-    } else if (argc > 2){
+    } else if (argc > 2)
+    {
         std::cerr << "Usage: ./server --directory <path_to_directory>\n";
         return 1;
     }
@@ -219,7 +221,8 @@ int main(int argc, char **argv)
     int server_fd = get_server_socket();
     std::cout << "Server is listening on port " << PORT << std::endl;
 
-    while (true) {
+    while (true) 
+    {
         int client_fd = accept(server_fd, nullptr, nullptr); 
         if (client_fd < 0) 
         {
