@@ -208,9 +208,6 @@ int get_server_socket()
 
 int main(int argc, char **argv)
 {
-    std::cout << std::unitbuf;
-    std::cerr << std::unitbuf;
-
     if (argc > 2 && std::string(argv[1]) == "--directory")
     {
         working_directory = argv[2];
