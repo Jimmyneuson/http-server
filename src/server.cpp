@@ -10,11 +10,14 @@
 #include <netdb.h>
 #include <poll.h>
 #include <vector>
+#include <fstream>
 
 const int PORT = 80;
 const int BACKLOG = 5;
-const char* RESPONSE_200 = "HTTP/1.1 200 OK\r\n\r\n";
-const char* RESPONSE_404 = "HTTP/1.1 404 Not Found\r\n\r\n";
+const std::string RESPONSE_200 = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+const std::string RESPONSE_404 = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+
+std::string working_directory;
 
 std::string parse_directory(std::string request)
 {
@@ -27,8 +30,32 @@ std::string plain_text_response(std::string body)
 {
     std::string response = "HTTP/1.1 200 OK\r\n";
     response += "Content-Type: text/plain\r\n";
-    response += "Content-Length: " + std::to_string(body.length()) + "\r\n\r\n";
+    response += "Content-Length: " + std::to_string(body.length()) + "\r\n";
+    response += "\r\n";
     response += body;
+    return response;
+}
+
+std::string file_response(std::string filename)
+{
+    std::string file_path = working_directory.substr(1) + filename;
+    std::ifstream file(file_path);
+    if (!file) {
+        std::cout << "test" << std::endl;
+        return RESPONSE_404;
+    }
+
+    std::string file_content((std::istreambuf_iterator<char>(file) ),
+                       ( std::istreambuf_iterator<char>()     ));
+
+    std::string response = "HTTP/1.1 200 OK\r\n";
+    response += "Content-Type: application/octet-stream\r\n";
+    response += "Content-Length: " + std::to_string(sizeof(file_content)) + "\r\n";
+    response += "\r\n";
+    response += file_content;
+
+    file.close();
+
     return response;
 }
 
@@ -36,24 +63,49 @@ std::string extract_header(std::string request, std::string header)
 {
     int start = request.find(header);
     int end = request.find("\r\n", start);
-    int len = header.length() + 1;
-    std::string value = request.substr(start + len, end - start + len);
+    int len = header.length() + 2;
+    std::string value = request.substr(start + len, end - (start + len));
     return value;
 }
 
-void handle_request(int client_fd, std::string request) {
+std::string get_method(std::string request) {
+    if (request.starts_with("GET")) 
+    {
+        return "GET";
+    } else if (request.starts_with("POST"))
+    {
+        return "POST";
+    }
+    return "NONE";
+}
+
+void write_file(std::string filename, std::string content)
+{
+    std::string file_path = working_directory.substr(1) + filename;
+    std::ofstream file(file_path);
+    if (!file)
+    {
+        std::cerr << "Could not open file";
+    }
+    file << content;
+    file.close();
+}
+
+void handle_request(int client_fd, std::string request) 
+{
+    std::string method = get_method(request);
     std::string dir = parse_directory(request);
 
     if (dir == "/")
     {
-        if (send(client_fd, RESPONSE_200, strlen(RESPONSE_200), 0) == -1)
+        if (send(client_fd, RESPONSE_200.c_str(), RESPONSE_200.size(), 0) == -1)
         {
             std::cerr << "Could not send response";
         }
     }
     else if (dir.starts_with("/echo/"))
     {
-        std::string body = dir.substr(6, dir.length() - 5);
+        std::string body = dir.substr(6);
         std::string response = plain_text_response(body);
         if (send(client_fd, response.c_str(), response.size(), 0) == -1)
         {
@@ -68,17 +120,39 @@ void handle_request(int client_fd, std::string request) {
         {
             std::cerr << "Could not send response";
         }
+    } else if (dir.starts_with("/files/"))
+    {
+        std::string filename = dir.substr(7);
+        if (method == "GET")
+        {
+            std::string response = file_response(filename);
+            if (send(client_fd, response.c_str(), response.size(), 0) < 0) 
+            {
+                std::cerr << "Could not send response";
+            }
+        } else if (method == "POST")
+        {
+            int start = request.rfind("\r\n");
+            std::string body = request.substr(start+2);
+            std::string response = "HTTP/1.1 201 Created\r\n\r\n";
+            write_file(filename, body);
+            if (send(client_fd, response.c_str(), response.size(), 0) < 0)
+            {
+                std::cerr << "Could not send response";
+            }
+        }
     }
     else
     {
-        if (send(client_fd, RESPONSE_404, strlen(RESPONSE_404), 0) == -1)
+        if (send(client_fd, RESPONSE_404.c_str(), RESPONSE_404.size(), 0) == -1)
         {
             std::cerr << "Could not send response";
         }
     }
 }
 
-int get_server_socket() {
+int get_server_socket() 
+{
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0)
     {
@@ -122,51 +196,62 @@ int main(int argc, char **argv)
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
 
+    if (argc > 2 && std::string(argv[1]) == "--directory")
+    {
+        working_directory = argv[2];
+    } else if (argc > 2){
+        std::cerr << "Usage: ./server --directory <path_to_directory>\n";
+        return 1;
+    }
+
     int server_fd = get_server_socket();
-
-    struct sockaddr_in client_addr;
-    int client_addr_len = sizeof(client_addr);
-
     std::cout << "Server is listening on port " << PORT << std::endl;
 
     std::vector<pollfd> fds;
     fds.push_back({server_fd, POLLIN, 0});
 
     while (true) {
-        if (poll(fds.data(), fds.size(), -1) < 0) {
+        if (poll(fds.data(), fds.size(), -1) < 0) 
+        {
             std::cerr << "poll error";
             return 1;
         }
 
-        for (int i = 0; i < fds.size(); i++) {
+        for (int i = 0; i < fds.size(); i++) 
+        {
             // Check for incoming connection on server
-            if (fds[i].fd == server_fd && (fds[i].revents & POLLIN)) {
+            if (fds[i].fd == server_fd && (fds[i].revents & POLLIN)) 
+            {
                 int client_fd = accept(server_fd, nullptr, nullptr); 
-                if (client_fd < 0) {
+                if (client_fd < 0) 
+                {
                     std::cerr << "accept failed";
                     return 1;
-                } else {
+                } else 
+                {
                     std::cout << "New client connected: " << client_fd << std::endl;
                     fds.push_back({client_fd, POLLIN, 0});
                 }
             } else if (fds[i].revents & POLLIN) {
-                const int buffer_size = 1024;
-                char buffer[buffer_size] = {0};
-                int bytes = recv(fds[i].fd, buffer, buffer_size, 0);
-                if (bytes > 0) {
-                    std::cout << "Request from client " << fds[i].fd << ": " << buffer << std::endl;
-                    std::string request(buffer, buffer_size);
-                    handle_request(fds[i].fd, request);
-                } else {
-                    std::cout << "Connection closed from client " << fds[i].fd << std::endl;
-                    close(fds[i].fd);
-                    fds.erase(fds.begin() + i);
-                    i--;
+                    const int buffer_size = 1024;
+                    char buffer[buffer_size] = {0};
+                    int bytes = recv(fds[i].fd, buffer, buffer_size, 0);
+                    if (bytes > 0) 
+                    {
+                        std::cout << "Request from client " << fds[i].fd << ":\n" << buffer << std::endl;
+                        std::string request(buffer, bytes);
+                        handle_request(fds[i].fd, request);
+                    } else 
+                    {
+                        std::cout << "Connection closed from client " << fds[i].fd << std::endl;
+                        close(fds[i].fd);
+                        fds.erase(fds.begin() + i);
+                        i--;
+                    }
                 }
             }
         }
-    }
 
-    close(server_fd);
-    return 0;
-}
+        close(server_fd);
+        return 0;
+    }
