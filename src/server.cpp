@@ -11,9 +11,10 @@
 #include <poll.h>
 #include <vector>
 #include <fstream>
+#include <thread>
 
 const int PORT = 80;
-const int BACKLOG = 5;
+const int BACKLOG = 32;
 const std::string RESPONSE_200 = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
 const std::string RESPONSE_404 = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
 
@@ -91,8 +92,22 @@ void write_file(std::string filename, std::string content)
     file.close();
 }
 
-void handle_request(int client_fd, std::string request) 
+void handle_request(int client_fd) 
 {
+    const int buffer_size = 1024;
+    char buffer[buffer_size] = {0};
+
+    int bytes = recv(client_fd, buffer, buffer_size, 0);
+    if (bytes > 0) 
+    {
+        std::cout << "Request from client " << client_fd << ":\n" << buffer << std::endl;
+    } else 
+    {
+        std::cout << "Connection closed from client " << client_fd << std::endl;
+        close(client_fd);
+    }
+
+    std::string request(buffer, bytes);
     std::string method = get_method(request);
     std::string dir = parse_directory(request);
 
@@ -207,51 +222,21 @@ int main(int argc, char **argv)
     int server_fd = get_server_socket();
     std::cout << "Server is listening on port " << PORT << std::endl;
 
-    std::vector<pollfd> fds;
-    fds.push_back({server_fd, POLLIN, 0});
-
     while (true) {
-        if (poll(fds.data(), fds.size(), -1) < 0) 
+        int client_fd = accept(server_fd, nullptr, nullptr); 
+        if (client_fd < 0) 
         {
-            std::cerr << "poll error";
+            std::cerr << "accept failed";
             return 1;
-        }
-
-        for (int i = 0; i < fds.size(); i++) 
+        } else 
         {
-            // Check for incoming connection on server
-            if (fds[i].fd == server_fd && (fds[i].revents & POLLIN)) 
-            {
-                int client_fd = accept(server_fd, nullptr, nullptr); 
-                if (client_fd < 0) 
-                {
-                    std::cerr << "accept failed";
-                    return 1;
-                } else 
-                {
-                    std::cout << "New client connected: " << client_fd << std::endl;
-                    fds.push_back({client_fd, POLLIN, 0});
-                }
-            } else if (fds[i].revents & POLLIN) {
-                    const int buffer_size = 1024;
-                    char buffer[buffer_size] = {0};
-                    int bytes = recv(fds[i].fd, buffer, buffer_size, 0);
-                    if (bytes > 0) 
-                    {
-                        std::cout << "Request from client " << fds[i].fd << ":\n" << buffer << std::endl;
-                        std::string request(buffer, bytes);
-                        handle_request(fds[i].fd, request);
-                    } else 
-                    {
-                        std::cout << "Connection closed from client " << fds[i].fd << std::endl;
-                        close(fds[i].fd);
-                        fds.erase(fds.begin() + i);
-                        i--;
-                    }
-                }
-            }
+            std::cout << "New client connected: " << client_fd << std::endl;
         }
 
-        close(server_fd);
-        return 0;
+        std::thread thread_obj(handle_request, client_fd);
+        thread_obj.detach();
     }
+
+    close(server_fd);
+    return 0;
+}
