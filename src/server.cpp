@@ -8,10 +8,9 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <poll.h>
-#include <vector>
 #include <fstream>
 #include <thread>
+#include <zlib.h>
 
 const int PORT = 80;
 const int BACKLOG = 32;
@@ -93,6 +92,81 @@ void write_file(std::string filename, std::string content)
     file.close();
 }
 
+bool has_encoding(std::string str, std::string target)
+{
+    if (str.find(",") == std::string::npos)
+    {
+        return str == target;
+    }
+
+    int start = 0;
+
+    while (true)
+    {
+        std::cout << str.substr(start, str.find(",", start) - start) << std::endl;
+        if (str.substr(start, str.find(",", start) - start) == target)
+        {
+            return true;
+        } else
+        {
+            if (str.find(",", start) == std::string::npos)
+            {
+                return false;
+            }
+            start = str.find(",", start) + 2;
+        }
+    }
+
+    return false;
+}
+
+std::string gzip(std::string str)
+{
+    z_stream zs;
+
+    memset(&zs, 0, sizeof(zs));
+
+    if (deflateInit2(&zs, Z_BEST_COMPRESSION, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY) != Z_OK)
+
+        throw(std::runtime_error("deflateInit failed while compressing."));
+
+    zs.next_in = (Bytef*)str.data();
+
+    zs.avail_in = str.size();
+
+    int ret;
+
+    char outbuffer[32768];
+
+    std::string outstring;
+
+    do {
+
+        zs.next_out = reinterpret_cast<Bytef*>(outbuffer);
+
+        zs.avail_out = sizeof(outbuffer);
+
+        ret = deflate(&zs, Z_FINISH);
+
+        if (outstring.size() < zs.total_out) {
+
+            outstring.append(outbuffer, zs.total_out - outstring.size());
+
+        }
+
+    } while (ret == Z_OK);
+
+    deflateEnd(&zs);
+
+    if (ret != Z_STREAM_END) {
+
+        throw(std::runtime_error("Exception during zlib compression: " + std::to_string(ret)));
+
+    }
+
+    return outstring;
+}
+
 void handle_request(int client_fd) 
 {
     const int buffer_size = 1024;
@@ -121,8 +195,22 @@ void handle_request(int client_fd)
     }
     else if (dir.starts_with("/echo/"))
     {
+        std::string encoding = extract_header(request, "Accept-Encoding"); 
+        std::string response;
         std::string body = dir.substr(6);
-        std::string response = plain_text_response(body);
+
+        if (!encoding.empty() && has_encoding(encoding, "gzip")) {
+            body = gzip(body);
+            response = "HTTP/1.1 200 OK\r\n";
+            response += "Content-Encoding: gzip\r\n";
+            response += "Content-Type: text/plain\r\n";
+            response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+            response += "\r\n";
+            response += body;
+        } else {
+            response = plain_text_response(body);
+        }
+
         if (send(client_fd, response.c_str(), response.size(), 0) == -1)
         {
             std::cerr << "Could not send response";
