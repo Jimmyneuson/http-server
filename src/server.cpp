@@ -73,7 +73,8 @@ std::string get_method(std::string request)
     if (request.starts_with("GET")) 
     {
         return "GET";
-    } else if (request.starts_with("POST"))
+    } 
+    else if (request.starts_with("POST"))
     {
         return "POST";
     }
@@ -106,7 +107,8 @@ bool has_encoding(std::string str, std::string target)
         if (str.substr(start, str.find(",", start) - start) == target)
         {
             return true;
-        } else
+        } 
+        else
         {
             if (str.find(",", start) == std::string::npos)
             {
@@ -165,7 +167,8 @@ void handle_request(int client_fd)
     if (bytes > 0) 
     {
         std::cout << "Request from client " << client_fd << ":\n" << buffer << std::endl;
-    } else 
+    } 
+    else 
     {
         std::cout << "Connection closed from client " << client_fd << std::endl;
         close(client_fd);
@@ -196,7 +199,9 @@ void handle_request(int client_fd)
             response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
             response += "\r\n";
             response += body;
-        } else {
+        } 
+        else 
+        {
             response = plain_text_response(body);
         }
 
@@ -213,7 +218,8 @@ void handle_request(int client_fd)
         {
             std::cerr << "Could not send response";
         }
-    } else if (dir.starts_with("/files/"))
+    } 
+    else if (dir.starts_with("/files/"))
     {
         std::string filename = dir.substr(7);
         if (method == "GET")
@@ -223,7 +229,8 @@ void handle_request(int client_fd)
             {
                 std::cerr << "Could not send response";
             }
-        } else if (method == "POST")
+        } 
+        else if (method == "POST")
         {
             int start = request.rfind("\r\n");
             std::string body = request.substr(start+2);
@@ -289,7 +296,8 @@ int main(int argc, char **argv)
     if (argc > 2 && std::string(argv[1]) == "--directory")
     {
         working_directory = argv[2];
-    } else if (argc > 2)
+    } 
+    else if (argc > 2)
     {
         std::cerr << "Usage: ./server --directory <path_to_directory>\n";
         return 1;
@@ -305,7 +313,8 @@ int main(int argc, char **argv)
         {
             std::cerr << "accept failed";
             return 1;
-        } else 
+        } 
+        else 
         {
             std::cout << "New client connected: " << client_fd << std::endl;
         }
