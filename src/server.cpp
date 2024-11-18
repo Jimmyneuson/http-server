@@ -103,7 +103,6 @@ bool has_encoding(std::string str, std::string target)
 
     while (true)
     {
-        std::cout << str.substr(start, str.find(",", start) - start) << std::endl;
         if (str.substr(start, str.find(",", start) - start) == target)
         {
             return true;
@@ -122,36 +121,28 @@ bool has_encoding(std::string str, std::string target)
 
 std::string gzip(std::string str)
 {
+    // track compression state
     z_stream zs;
-
     memset(&zs, 0, sizeof(zs));
 
+    // initialize DEFLATE data with gzip headers
     if (deflateInit2(&zs, Z_BEST_COMPRESSION, Z_DEFLATED, 31, 8, Z_DEFAULT_STRATEGY) != Z_OK)
-
-        throw(std::runtime_error("deflateInit failed while compressing."));
+    {
+        std::cerr << "could not compress";
+    }
 
     zs.next_in = (Bytef*)str.data();
-
     zs.avail_in = str.size();
-
     int ret;
-
     char outbuffer[32768];
-
     std::string outstring;
 
     do {
-
         zs.next_out = reinterpret_cast<Bytef*>(outbuffer);
-
         zs.avail_out = sizeof(outbuffer);
-
         ret = deflate(&zs, Z_FINISH);
-
         if (outstring.size() < zs.total_out) {
-
             outstring.append(outbuffer, zs.total_out - outstring.size());
-
         }
 
     } while (ret == Z_OK);
@@ -159,9 +150,7 @@ std::string gzip(std::string str)
     deflateEnd(&zs);
 
     if (ret != Z_STREAM_END) {
-
-        throw(std::runtime_error("Exception during zlib compression: " + std::to_string(ret)));
-
+        std::cerr << "could not compress";
     }
 
     return outstring;
