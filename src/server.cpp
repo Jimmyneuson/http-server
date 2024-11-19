@@ -309,11 +309,11 @@ int main(int argc, char **argv)
     while (true) 
     {
         int client_fd = accept(server_fd, nullptr, nullptr); 
-        if (client_fd < 0) 
+        if (client_fd < 0)
         {
             std::cerr << "accept failed";
             return 1;
-        } 
+        }
         else 
         {
             std::cout << "New client connected: " << client_fd << std::endl;
