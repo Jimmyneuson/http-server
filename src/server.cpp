@@ -11,77 +11,58 @@
 #include <fstream>
 #include <thread>
 #include <zlib.h>
+#include <map>
+
+#include "HttpMessage.h"
+#include "HttpRequest.h"
+#include "HttpResponse.h"
 
 const int PORT = 80;
 const int BACKLOG = 32;
-const std::string RESPONSE_200 = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
-const std::string RESPONSE_404 = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
 
-std::string working_directory;
+const HttpResponse RESPONSE_200(OK, {
+    {"Content-Type", "text/plain"},
+    {"Content-Length", "0"},
+});
+const HttpResponse RESPONSE_404(NOT_FOUND, {
+    {"Content-Type", "text/plain"},
+    {"Content-Length", "0"},
+});
 
-std::string parse_directory(std::string request)
+HttpResponse plain_text_response(std::string body)
 {
-    int start = request.find(" ") + 1;
-    int end = request.find(" ", start);
-    return request.substr(start, end - start);
-}
+    HttpResponse response(OK, {
+            {"Content-Type", "text/plain"},
+            {"Content-Length", std::to_string(body.length())}
+    }, body);
 
-std::string plain_text_response(std::string body)
-{
-    std::string response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-Type: text/plain\r\n";
-    response += "Content-Length: " + std::to_string(body.length()) + "\r\n";
-    response += "\r\n";
-    response += body;
     return response;
 }
 
-std::string file_response(std::string filename)
+HttpResponse file_response(std::string filename, std::string working_directory)
 {
     std::string file_path = working_directory.substr(1) + filename;
+    std::cout << "reading in " << file_path << std::endl;
     std::ifstream file(file_path);
     if (!file) {
-        std::cout << "test" << std::endl;
+        std::cout << "1";
         return RESPONSE_404;
     }
 
-    std::string file_content((std::istreambuf_iterator<char>(file) ),
-                       ( std::istreambuf_iterator<char>()     ));
+    std::string file_content((std::istreambuf_iterator<char>(file)),
+                             ( std::istreambuf_iterator<char>()));
 
-    std::string response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-Type: application/octet-stream\r\n";
-    response += "Content-Length: " + std::to_string(sizeof(file_content)) + "\r\n";
-    response += "\r\n";
-    response += file_content;
+    HttpResponse response(OK, {
+        {"Content-Type", "application/octet-stream"},
+        {"Content-Length", std::to_string(file_content.length())}
+    }, file_content);
 
     file.close();
 
     return response;
 }
 
-std::string extract_header(std::string request, std::string header)
-{
-    int start = request.find(header);
-    int end = request.find("\r\n", start);
-    int len = header.length() + 2;
-    std::string value = request.substr(start + len, end - (start + len));
-    return value;
-}
-
-std::string get_method(std::string request) 
-{
-    if (request.starts_with("GET")) 
-    {
-        return "GET";
-    } 
-    else if (request.starts_with("POST"))
-    {
-        return "POST";
-    }
-    return "NONE";
-}
-
-void write_file(std::string filename, std::string content)
+void write_file(std::string filename, std::string content, std::string working_directory)
 {
     std::string file_path = working_directory.substr(1) + filename;
     std::ofstream file(file_path);
@@ -93,33 +74,6 @@ void write_file(std::string filename, std::string content)
     file.close();
 }
 
-bool has_encoding(std::string str, std::string target)
-{
-    if (str.find(",") == std::string::npos)
-    {
-        return str == target;
-    }
-
-    int start = 0;
-
-    while (true)
-    {
-        if (str.substr(start, str.find(",", start) - start) == target)
-        {
-            return true;
-        } 
-        else
-        {
-            if (str.find(",", start) == std::string::npos)
-            {
-                return false;
-            }
-            start = str.find(",", start) + 2;
-        }
-    }
-
-    return false;
-}
 
 std::string gzip(std::string str)
 {
@@ -158,7 +112,7 @@ std::string gzip(std::string str)
     return outstring;
 }
 
-void handle_request(int client_fd) 
+void handle_request(int client_fd, std::string working_directory)
 {
     const int buffer_size = 1024;
     char buffer[buffer_size] = {0};
@@ -174,80 +128,60 @@ void handle_request(int client_fd)
         close(client_fd);
     }
 
-    std::string request(buffer, bytes);
-    std::string method = get_method(request);
-    std::string dir = parse_directory(request);
+    std::string request_data(buffer, bytes);
+    HttpRequest request = HttpRequest::fromRequest(request_data);
 
-    if (dir == "/")
+    if (request.target == "/")
     {
-        if (send(client_fd, RESPONSE_200.c_str(), RESPONSE_200.size(), 0) == -1)
-        {
-            std::cerr << "Could not send response";
-        }
+        RESPONSE_200.send_to(client_fd);
     }
-    else if (dir.starts_with("/echo/"))
+    else if (request.target.starts_with("/echo/"))
     {
-        std::string encoding = extract_header(request, "Accept-Encoding"); 
-        std::string response;
-        std::string body = dir.substr(6);
+        HttpResponse response;
+        std::string body = request.target.substr(6);
 
-        if (!encoding.empty() && has_encoding(encoding, "gzip")) {
-            body = gzip(body);
-            response = "HTTP/1.1 200 OK\r\n";
-            response += "Content-Encoding: gzip\r\n";
-            response += "Content-Type: text/plain\r\n";
-            response += "Content-Length: " + std::to_string(body.size()) + "\r\n";
-            response += "\r\n";
-            response += body;
+        if (request.has_encoding("gzip")) {
+            std::string compressed_data = gzip(body);
+            response.headers = {
+                {"Content-Encoding", "gzip"},
+                {"Content-Type", "text/plain"},
+                {"Content-Length", std::to_string(compressed_data.size())}
+            };
+            response.body = compressed_data;
         } 
         else 
         {
             response = plain_text_response(body);
         }
 
-        if (send(client_fd, response.c_str(), response.size(), 0) == -1)
-        {
-            std::cerr << "Could not send response";
-        }
+        response.send_to(client_fd);
     }
-    else if (dir.starts_with("/user-agent"))
+    else if (request.target.starts_with("/user-agent"))
     {
-        std::string body = extract_header(request, "User-Agent");
-        std::string response = plain_text_response(body);
-        if (send(client_fd, response.c_str(), response.size(), 0) == -1)
-        {
-            std::cerr << "Could not send response";
-        }
+        std::string body = request.headers["User-Agent"];
+        HttpResponse response = plain_text_response(body);
+        response.send_to(client_fd);
     } 
-    else if (dir.starts_with("/files/"))
+    else if (request.target.starts_with("/files/"))
     {
-        std::string filename = dir.substr(7);
-        if (method == "GET")
+        std::string filename = request.target.substr(7);
+        HttpResponse response;
+
+        if (request.method == GET)
         {
-            std::string response = file_response(filename);
-            if (send(client_fd, response.c_str(), response.size(), 0) < 0) 
-            {
-                std::cerr << "Could not send response";
-            }
+            response = file_response(filename, working_directory);
         } 
-        else if (method == "POST")
+        else if (request.method == POST)
         {
-            int start = request.rfind("\r\n");
-            std::string body = request.substr(start+2);
-            std::string response = "HTTP/1.1 201 Created\r\n\r\n";
-            write_file(filename, body);
-            if (send(client_fd, response.c_str(), response.size(), 0) < 0)
-            {
-                std::cerr << "Could not send response";
-            }
+            response = HttpResponse(CREATED);
+            write_file(filename, request.body, working_directory);
         }
+
+        response.send_to(client_fd);
     }
     else
     {
-        if (send(client_fd, RESPONSE_404.c_str(), RESPONSE_404.size(), 0) == -1)
-        {
-            std::cerr << "Could not send response";
-        }
+        RESPONSE_404.send_to(client_fd);
     }
 }
 
@@ -293,6 +227,7 @@ int get_server_socket()
 
 int main(int argc, char **argv)
 {
+    std::string working_directory;
     if (argc > 2 && std::string(argv[1]) == "--directory")
     {
         working_directory = argv[2];
@@ -319,7 +254,7 @@ int main(int argc, char **argv)
             std::cout << "New client connected: " << client_fd << std::endl;
         }
 
-        std::thread thread_obj(handle_request, client_fd);
+        std::thread thread_obj(handle_request, client_fd, working_directory);
         thread_obj.detach();
     }
 
