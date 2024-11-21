@@ -41,7 +41,7 @@ HttpResponse plain_text_response(std::string body)
 
 HttpResponse file_response(std::string filename, std::string working_directory)
 {
-    std::string file_path = working_directory.substr(1) + filename;
+    std::string file_path = working_directory + filename;
     std::ifstream file(file_path);
     if (!file) {
         return RESPONSE_404;
@@ -62,7 +62,7 @@ HttpResponse file_response(std::string filename, std::string working_directory)
 
 void write_file(std::string filename, std::string content, std::string working_directory)
 {
-    std::string file_path = working_directory.substr(1) + filename;
+    std::string file_path = working_directory + filename;
 
     std::ofstream file(file_path);
     if (!file)

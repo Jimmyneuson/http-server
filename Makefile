@@ -19,7 +19,7 @@ run: $(OUTPUT)
 
 test: $(OUTPUT)
 	@echo "Starting server in the background"
-	@./$(OUTPUT) --directory /tmp/ > /dev/null 2>&1 &
+	@./$(OUTPUT) --directory tmp/ > /dev/null 2>&1 &
 	@echo "Beginning tests"
 	@sleep 1
 	@printf "Running root directory test: "
