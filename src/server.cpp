@@ -42,10 +42,8 @@ HttpResponse plain_text_response(std::string body)
 HttpResponse file_response(std::string filename, std::string working_directory)
 {
     std::string file_path = working_directory.substr(1) + filename;
-    std::cout << "reading in " << file_path << std::endl;
     std::ifstream file(file_path);
     if (!file) {
-        std::cout << "1";
         return RESPONSE_404;
     }
 
@@ -65,6 +63,7 @@ HttpResponse file_response(std::string filename, std::string working_directory)
 void write_file(std::string filename, std::string content, std::string working_directory)
 {
     std::string file_path = working_directory.substr(1) + filename;
+
     std::ofstream file(file_path);
     if (!file)
     {
@@ -173,7 +172,10 @@ void handle_request(int client_fd, std::string working_directory)
         } 
         else if (request.method == POST)
         {
-            response = HttpResponse(CREATED);
+            response = HttpResponse(CREATED, {
+                {"Content-Type", "text/plain"},
+                {"Content-Length", "0"}
+            });
             write_file(filename, request.body, working_directory);
         }
 
@@ -239,6 +241,11 @@ int main(int argc, char **argv)
     }
 
     int server_fd = get_server_socket();
+    if (server_fd == 1)
+    {
+        return server_fd;
+    }
+
     std::cout << "Server is listening on port " << PORT << std::endl;
 
     while (true) 
