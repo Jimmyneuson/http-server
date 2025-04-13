@@ -33,7 +33,8 @@ HttpResponse plain_text_response(std::string body)
 {
     HttpResponse response(OK, {
             {"Content-Type", "text/plain"},
-            {"Content-Length", std::to_string(body.length())}
+            {"Content-Length", std::to_string(body.length())},
+            {"Connection", "keep-alive"}
     }, body);
 
     return response;
@@ -117,74 +118,81 @@ void handle_request(int client_fd, std::string working_directory)
     char buffer[buffer_size] = {0};
 
     int bytes = recv(client_fd, buffer, buffer_size, 0);
-    if (bytes > 0) 
+    while (bytes > 0) 
     {
         std::cout << "Request from client " << client_fd << ":\n" << buffer << std::endl;
-    } 
-    else 
-    {
-        std::cout << "Connection closed from client " << client_fd << std::endl;
-        close(client_fd);
-    }
+        std::string request_data(buffer, bytes);
+        HttpRequest request = HttpRequest::fromRequest(request_data);
 
-    std::string request_data(buffer, bytes);
-    HttpRequest request = HttpRequest::fromRequest(request_data);
+        if (request.headers["Connection"] == "close") break;
 
-    if (request.target == "/")
-    {
-        RESPONSE_200.send_to(client_fd);
-    }
-    else if (request.target.starts_with("/echo/"))
-    {
-        HttpResponse response;
-        std::string body = request.target.substr(6);
-
-        if (request.has_encoding("gzip")) {
-            std::string compressed_data = gzip(body);
-            response.headers = {
-                {"Content-Encoding", "gzip"},
-                {"Content-Type", "text/plain"},
-                {"Content-Length", std::to_string(compressed_data.size())}
-            };
-            response.body = compressed_data;
-        } 
-        else 
+        if (request.target == "/")
         {
-            response = plain_text_response(body);
+            RESPONSE_200.send_to(client_fd);
+        }
+        else if (request.target.starts_with("/echo/"))
+        {
+            HttpResponse response;
+            std::string body = request.target.substr(6);
+
+            if (request.has_encoding("gzip")) {
+                std::string compressed_data = gzip(body);
+                response.headers = {
+                    {"Content-Encoding", "gzip"},
+                    {"Content-Type", "text/plain"},
+                    {"Content-Length", std::to_string(compressed_data.size())}
+                };
+                response.body = compressed_data;
+            } 
+            else 
+            {
+                response = plain_text_response(body);
+            }
+
+            response.send_to(client_fd);
+        }
+        else if (request.target.starts_with("/user-agent"))
+        {
+            std::string body = request.headers["User-Agent"];
+            HttpResponse response = plain_text_response(body);
+            response.send_to(client_fd);
+        } 
+        else if (request.target.starts_with("/files/"))
+        {
+            std::string filename = request.target.substr(7);
+            HttpResponse response;
+
+            if (request.method == GET)
+            {
+                response = file_response(filename, working_directory);
+            } 
+            else if (request.method == POST)
+            {
+                response = HttpResponse(CREATED, {
+                    {"Content-Type", "text/plain"},
+                    {"Content-Length", "0"}
+                });
+                write_file(filename, request.body, working_directory);
+            }
+
+            response.send_to(client_fd);
+        }
+        else
+        {
+            RESPONSE_404.send_to(client_fd);
         }
 
-        response.send_to(client_fd);
-    }
-    else if (request.target.starts_with("/user-agent"))
-    {
-        std::string body = request.headers["User-Agent"];
-        HttpResponse response = plain_text_response(body);
-        response.send_to(client_fd);
+        bytes = recv(client_fd, buffer, buffer_size, 0);
     } 
-    else if (request.target.starts_with("/files/"))
-    {
-        std::string filename = request.target.substr(7);
-        HttpResponse response;
 
-        if (request.method == GET)
-        {
-            response = file_response(filename, working_directory);
-        } 
-        else if (request.method == POST)
-        {
-            response = HttpResponse(CREATED, {
-                {"Content-Type", "text/plain"},
-                {"Content-Length", "0"}
-            });
-            write_file(filename, request.body, working_directory);
-        }
-
-        response.send_to(client_fd);
-    }
-    else
-    {
-        RESPONSE_404.send_to(client_fd);
-    }
+    HttpResponse close_response(OK, {
+        {"Content-Type", "text/plain"},
+        {"Content-Length", "0"},
+        {"Connection", "close"} 
+    });
+    close_response.send_to(client_fd);
+    std::cout << "Connection closed from client " << client_fd << std::endl;
+    close(client_fd);
 }
 
 int get_server_socket() 
